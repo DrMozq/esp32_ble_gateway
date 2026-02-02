@@ -4,4 +4,4 @@
 
 void initBLE();
 
-void pubFoundNRF();
+void pubFoundBLE();

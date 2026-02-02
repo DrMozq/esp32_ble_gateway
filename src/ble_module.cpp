@@ -12,9 +12,9 @@ void initBLE() {
     printLog(SUCCESS, "BLE initialiazed successfully");
 }
 
-void pubFoundNRF() 
+void pubFoundBLE() 
 {
-    printLog(INFO, "Starting BLE scan for Nordic (nRF52832) devices...");
+    printLog(INFO, "Starting BLE scan for target devices...");
 
     unsigned long scanStart = millis();
 
@@ -25,7 +25,7 @@ void pubFoundNRF()
 
     BLEScanResults foundDevices = pBLEScan->start(10, false);
     int devicesCount = foundDevices.getCount();
-    int nordicCount = 0;
+    int targetCount = 0;
 
     printLog(INFO, "Scan finished. Total devices found: " + String(devicesCount));
 
@@ -34,45 +34,42 @@ void pubFoundNRF()
     // найденные устройства
     for (int i = 0; i < devicesCount; i++) {
         BLEAdvertisedDevice device = foundDevices.getDevice(i);
-        
-        if (device.haveManufacturerData()) {
-            std::string mdata = device.getManufacturerData();
-            if (mdata.length() >= 2) {
-                uint16_t manufacturerID = ((uint8_t)mdata[1] << 8) | (uint8_t)mdata[0]; 
+        String foundMac = device.getAddress().toString().c_str();
+        foundMac.toUpperCase(); 
 
-                if (manufacturerID == 0x0059) { // Nordic Semiconductor
-                    nordicCount++;
-                    String mac = device.getAddress().toString().c_str();
-                    String name = device.haveName() ? device.getName().c_str() : "(no name)";
-                    int rssi = device.getRSSI();
-
-                    printLog(INFO, "Found Nordic device #" + String(nordicCount) +
-                                    " | MAC: " + mac + " | RSSI: " + String(rssi) +
-                                    " | Name: " + name);
-                    
-                    
-                    if (nordicCount > 1) payload += ",";
-                    payload += "\n    {";
-                    payload += "\"mac\":\"" + mac + "\", ";
-                    payload += "\"name\":\"" + String(device.getName().c_str()) + "\", ";
-                    payload += "\"rssi\":" + String(rssi);
-                    payload += "}";
-                }
+        bool isMyTag = false;
+        for (int j = 0; j < TARGET_TAGS_COUNT; j++) {
+            if (foundMac == String(TARGET_TAGS[j])) {
+                isMyTag = true;
+                break;
             }
+        }
+
+        if (isMyTag) {
+            targetCount++;
+            int rssi = device.getRSSI();
+
+            printLog(INFO, "Target found! MAC: " + foundMac + " | RSSI: " + String(rssi));
+            
+            if (targetCount > 1) payload += ",";
+            payload += "\n    {";
+            payload += "\"mac\":\"" + foundMac + "\", ";
+            payload += "\"rssi\":" + String(rssi);
+            payload += "}";
         }
     }
     payload += "\n  ]\n}";
 
     // MQTT publish
-    if (nordicCount > 0) {
-        String topicNRF = String(GATEWAY_NAME) + "/nrf_devices";
+    if (targetCount > 0) {
+        String topicNRF = String(GATEWAY_NAME) + "/ble_tags";
         if (publishMQTT(topicNRF, payload)) { // попытка опубликовать
-            printLog(SUCCESS, "Found nRF devices successfully publish to MQTT ");
+            printLog(SUCCESS, "Found BLE tags successfully publish to MQTT ");
         } else {
-            printLog(ERROR, "MQTT not connected. Failed publish found nRF devices");
+            printLog(ERROR, "MQTT not connected. Failed publish found BLE tags");
         }
     } else {
-        printLog(WARNING, "No nRF devices found in this scan");
+        printLog(WARNING, "No BLE tags found in this scan");
     }
 
     pBLEScan->clearResults();

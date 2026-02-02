@@ -7,42 +7,57 @@
 #include <Arduino.h>
 
 
-int led_wifi_status = 2;
+const int LED_WIFI_STATUS = 2;
+const int RESET_BUTTON_PIN = 4;
 
 void setup()
 {
-    pinMode(led_wifi_status, OUTPUT);
+    pinMode(LED_WIFI_STATUS, OUTPUT);
+    pinMode(RESET_BUTTON_PIN, INPUT_PULLUP); 
     
-    initLogs();    
+    initLogs();
     initWiFi();
     initNTP();
     connectMQTT();
     initBLE();
 }
 
+
 unsigned long lastLoopTime = 0;
 const unsigned long loopInterval = 2000;
+unsigned long buttonPressTime = 0;
 
 void loop()
 {
-    if (millis() - lastLoopTime >= loopInterval) 
-    {
-        MQTTloop();
-
-        if (WiFiconnected()) {
-            digitalWrite(led_wifi_status, HIGH);   
-        } else {
-            digitalWrite(led_wifi_status, LOW);
+    if (digitalRead(RESET_BUTTON_PIN) == LOW) { 
+        if (buttonPressTime == 0) buttonPressTime = millis();
+        
+        // If you hold down the button for more than 5 seconds
+        if (millis() - buttonPressTime > 5000) {
+            printLog(WARNING, "Factory Reset triggered by button!");
             resetWiFi();
         }
-        if (!MQTTconnected()) {
-            connectMQTT();
-            if (!MQTTconnected()) {
-                resetWiFi();
-            }
+    } else {
+        buttonPressTime = 0;
+    }
+
+    // ---- MAIN LOGIC ---- //
+    MQTTloop();
+
+    if (millis() - lastLoopTime >= loopInterval) 
+    {
+        bool wifiOK = WiFiconnected();
+        bool mqttOK = MQTTconnected();
+
+        if (wifiOK && mqttOK) {
+            digitalWrite(LED_WIFI_STATUS, HIGH);
+            pubFoundBLE(); 
+        } else {
+            // resetWiFi();  // если нет кнопки
+            digitalWrite(LED_WIFI_STATUS, LOW);
+            if (wifiOK && !mqttOK) connectMQTT();
         }
 
-        pubFoundNRF();
         lastLoopTime = millis();
     }
 }

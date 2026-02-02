@@ -57,7 +57,7 @@ bool WiFiconnected() {
     if (WiFi.status() == WL_CONNECTED) {
         return true;
     }
-    printLog(ERROR, "WiFi connection is broken");
+    printLog(ERROR, "WiFi connection failed");
     return false;
 }
 
